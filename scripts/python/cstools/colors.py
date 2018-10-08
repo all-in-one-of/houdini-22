@@ -1,4 +1,3 @@
-#from cstools import *
 
 import cstools as cs
 
@@ -11,7 +10,7 @@ import cstools as cs
 # 'cloud', 'diamond', 'ensign', 'gurgle', 'light', 'null',
 # 'oval', 'peanut', 'pointy', 'slash', 'squared', 'star',
 # 'tabbed_left', 'tabbed_right', 'task' #, 'tilted', 'trapezoid_down', 'trapezoid_up',
-# 'wave')
+
 
 def customProcessNode(node):
     type_name = node.type().name().split(':')[0]
@@ -77,7 +76,8 @@ def customProcessNode(node):
              'whfxcachereader',
              'whCreatureLoader',
              'abaCreatureLoader',
-             'whFxAnimLoader']
+             'whFxAnimLoader',
+             'whHeightMapLoader']
     if type_name in types:
         cs.setColor(node, color_yellow)
         cs.setShape(node, 'trapezoid_down')
@@ -90,10 +90,9 @@ def customProcessNode(node):
         cs.setShape(node, 'trapezoid_down')
 
     # primitives
-    types = ['circle', 'sphere', 'box', 'font', 'line', 'grid', 'tube', 'torus', 'platonic']
+    types = ['circle', 'sphere', 'box', 'font', 'line', 'grid', 'tube', 'torus', 'platonic', 'cop2net']
     if type_name in types:
         cs.setColor(node, color_yellow_light)
-            
 
     # null
     if type_name in ['null', 'output']:
@@ -133,6 +132,7 @@ def customProcessNode(node):
     types = ['whAttribDisplay', 
              'volumevisualization',
              'vdbvisualizetree',
+             'heightfield_visualize',
              'scalarfieldvisualization',
              'vectorfieldvisualization'
              'scalarfieldvisualization', 

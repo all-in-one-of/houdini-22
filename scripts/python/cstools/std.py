@@ -133,10 +133,10 @@ def customProcessNode(node):
     if type_name in types:
         cs.setName(node, 'convert_to_'+node.parm('totype').evalAsString().lower())    
 
-    # convertvdb
-    types = ['convertvdb']
+    # convertvdb, convertheightfield
+    types = ['convertvdb', 'convertheightfield']
     if type_name in types:
-        cs.setName(node, 'convertvdb_to_'+node.parm('conversion').evalAsString())    
+        cs.setName(node, '%s_to_%s' % (type_name, node.parm('conversion').evalAsString()))
 
     # group
     types = ['group']
@@ -181,7 +181,12 @@ def customProcessNode(node):
         else:
             cs.setName(node, 'rename_' % (from1, to1))
 
-    # subsdivide
+    # rename (cop)
+    types = ['rename']
+    if type_name in types:
+        cs.setName(node, 'rename_%s_to_%s' % (node.parm('from').eval(), node.parm('to').eval()))
+
+    # subdivide
     types = ['subdivide']
     if type_name in types:
         cs.setName(node, 'subdivide_depth_%s_' % node.parm('iterations').eval())
@@ -250,15 +255,6 @@ def customProcessNode(node):
         cmd = 'fxStarfish -a browse -f %s -sc %s -t %s -sh %s -l %s'%(film,tree,scene,shot, elem)
         subprocess.Popen( cmd.split(), stdout=subprocess.PIPE)
         
-    # whMantra
-    types = ['whMantra', 'ifd']
-    if type_name in types:
-        rv_list = []
-        img = node.parm('vm_picture').eval()
-        if os.path.exists(img):
-            rv_list = img.replace(str(int(round(hou.frame()))).zfill(4), '####')
-        return rv_list
-
     # volume
     types = ['volume']
     if type_name in types:

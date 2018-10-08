@@ -5,830 +5,277 @@
  Note, that two definitions of the same element are not allowed in
  a single file. -->
 
-  <tool name="whHouGo_JustSave" label="Save File" icon="/vol/weta/linux64/whHouGo-dev/toolbar/whHouGo_JustSave.png">
-    <helpText><![CDATA[
-= whHouGo Save =
+  <toolshelf name="shelf_claude" label="Claude">
+    <memberTool name="cs"/>
+    <memberTool name="cs_alt"/>
+    <memberTool name="csAttribWrangle"/>
+    <memberTool name="csToggleColorSettings"/>
+    <memberTool name="csToggleOutPane"/>
+    <memberTool name="csToggleDisplayDependencies"/>
+    <memberTool name="srnd_docbuild0"/>
+    <memberTool name="csBubbleUpTakeParms"/>
+    <memberTool name="csDumpParms"/>
+    <memberTool name="csSetVisualizeNode"/>
+  </toolshelf>
+
+  <tool name="csAttribWrangle" label="attr wrangle" icon="SOP_attribwrangle">
+    <script scriptType="python"><![CDATA[nodes = hou.selectedNodes()
+for node in nodes:
+  wrangle_prefix = 'pts'
+  in_geo = node.geometry()
+  if in_geo.prims():
+    if in_geo.prims()[0].type() in [hou.primType.Volume]:
+      wrangle_prefix = 'vol'
+    elif in_geo.prims()[0].type() in [hou.primType.VDB]:
+      wrangle_prefix = 'vdb'
+        
+  outputs = list(node.outputConnections())
+  wrangle = None
+  if wrangle_prefix == 'pts':
+      wrangle = node.createOutputNode('attribwrangle', '%s_' % wrangle_prefix)
+  else:
+      wrangle = node.createOutputNode('volumewrangle', '%s_' % wrangle_prefix)
+ 
+  for con in outputs: 
+    con.outputNode().setInput(con.inputIndex(), wrangle)
     
-#type: script
-#context: all
-#internal: whHouGo_JustSave
-#largeicon: /vol/weta/linux64/whHouGo-dev/toolbar/whHouGo_JustSave.png
-
-""" whHouGo Save"""
-
-Saves the scene, and adds backup information regarding otls and their versions.
-If your hip file has never been saved (untitled) it will bring up a dialogue asking you to give it an element.
-
-    ]]></helpText>
-    <script scriptType="python"><![CDATA[
-import whUtil
-reload(whUtil)
-whUtil.save()
-]]></script>
-    <keywordList>
-      <keyword>Saves the file and updates the environment</keyword>
-    </keywordList>
+  wrangle.moveToGoodPosition()
+ ]]></script>
   </tool>
 
   <tool name="cs" label="cs" icon="SOP_wiretransfershape">
-    <script scriptType="python"><![CDATA[# customized actions depending on the node type
+    <script scriptType="python"><![CDATA[import cstools
 
-import os
-import subprocess
-import toolutils
+reload(cstools)
+reload(cstools.std)
+reload(cstools.alt)
+reload(cstools.colors)
 
-
-def setColor(node, cr=0.8, cg=0.8, cb=0.8):
-    """ Set the network color for the node """
-    col = hou.Color()
-    col.setRGB((cr, cg, cb))
-    node.setColor( col )
-
-def setName(node, name):
-    """ Set the node name """
-    if node.name() != name:
-        node.setName( name, unique_name=True)
-
-def connectParm(nodeFrom, parmFrom, nodeTo, parmTo):
-    # make a connection between two parameters
-    nodeTo.setInput(nodeTo.inputNames().index(parmTo), nodeFrom, nodeFrom.outputNames().index(parmFrom))
-
-
-def selectAttribute(attribs):
-    """ pops up a selection UI and returns the selected attribute """
-    attr_list = []
-    for attrib in attribs:
-        attr_name = attrib.name()
-        attr_str = attrib.name()
-        if attrib.dataType() == hou.attribData.Float:
-            if attrib.size()==1:
-                attr_str = 'float'
-            elif attrib.size()==3:
-                attr_str = 'vector'
-            else:
-                attr_str = 'float(%d)'%(attrib.size())
-        elif attrib.dataType() == hou.attribData.Int:
-            if attrib.size()==1:
-                attr_str = 'int'
-            else:
-                attr_str = 'int(%d)'%(attrib.size())
-        else:
-            if attrib.size()==1:
-                attr_str = 'string'
-            else:
-                attr_str = 'string(%d)'%(attrib.size())
-        attr_list.append("%s - %s"%(attr_name, attr_str))
-    ret = hou.ui.selectFromList(attr_list, exclusive=True, title='Attributes')
-    return ret
-
-def customProcessNode(node):
-
-    type_name = node.type().name()
-
-    rv_list = ""
-
-
-    # OBJ
-
-    # hlight
-    types = ['hlight']
-    if type_name in types:
-        setColor(node, node.parm('light_colorr').eval(), node.parm('light_colorg').eval(), node.parm('light_colorb').eval() )
-
-
-    #
-    # DOP
-    #
-    # whAttribDisplay
-    types = ['scalarfieldvisualization', 'vectorfieldvisualization']
-    if type_name in types:
-        setColor(node, 0.0, 0.8, 1.0)
-
-
-
-
-
-
-    #
-    # SOP
-    #
-
-    # color inputs
-    types = ['file',
-             'whReadGeo',
-             'wBakeReader',
-             'whBakeLoader',
-             'whCacheLoader',
-             'whCreatureLoader',
-             'whEnvLoader']
-    if type_name in types:
-        setColor(node, 1.0, 1.0, 0.4)
-
-    # object merge
-    types = ['object_merge']
-    if type_name in types:
-        setColor(node, 1.0, 1.0, 0.6)
-        if node.parm('objpath1').eval()!='':
-            setName(node, "__".join(node.parm('objpath1').eval().rsplit('/')[-2:]))
-
-    # null as OUT
-    types = ['null']
-    if type_name in types:
-        setColor(node, 0.4, 1.0, 0.4)
-        if node.name().startswith('null'):
-            setName(node, 'OUT')
-
-    # output
-    types = ['output']
-    if type_name in types:
-        setColor(node, 0.4, 1.0, 0.4)
-        if node.name().startswith('output'):
-            setName(node, 'OUTPUT')
-
-    # null as OUT
-    types = ['circle', 'sphere', 'box', 'font', 'line', 'grid', 'tube', 'torus', 'platonic']
-    if type_name in types:
-        setColor(node, 1.0, 1.0, 0.6)
-
-
-    # whAttribDisplay
-    types = ['whAttribDisplay']
-    if type_name in types:
-        setColor(node, 0.0, 0.8, 1.0)
-        setName(node, 'whAttribDisplay_'+node.parm('attr').evalAsString())
-
-    # volumevisualization
-    types = ['volumevisualization']
-    if type_name in types:
-        setColor(node, 0.0, 0.8, 1.0)
-
-    # cache
-    types = ['cache']
-    if type_name in types:
-        setColor(node, 0.4, 1.0, 1.0)
-
-    # multiply
-    types = ['multiply']
-    if type_name in types:
-        suffix = node.name().split('_', 1)
-        if len(node.inputConnections())==1 and len(suffix)==2:
-            node_parm = node.parent().createNode("parameter")
-            node.setInput(1,node_parm)
-            node_parm.moveToGoodPosition()
-            parmname = suffix[1]+'_amp'
-            setName(node_parm, parmname)
-            node_parm.parm('parmname').set(parmname)
-            node_parm.parm('parmlabel').set(parmname.replace('_',' ').title())
-            node_parm.parm('floatdef').set(1.0)
-            node_parm.parm('rangeflt1').set(0.0)
-            node_parm.parm('rangeflt2').set(10.0)
-            customProcessNode(node_parm)
-
-
-    types = ['parameter']
-    if type_name in types:
-        pname = node.parm('parmname').eval()
-        namelist = [ "",
-                   "Minimum Value In Source Range",
-                   "Maximum Value In Source Range",
-                   "Minimum Value In Destination Range",
-                   "Maximum Value In Destination Range"]
-        if pname.startswith('parm'):
-            pname = pname.replace('parm','',1)
-        if pname.startswith('_'):
-            pname = pname.replace('_','',1)
-        name = pname
-        if '_' in name:
-            name = name.replace('_',' ')
-        if node.parm('parmlabel').eval() in namelist:
-            node.parm('parmlabel').set(name)
-        name = node.parm('parmlabel').eval()
-        setName(node, name.replace(' ','_'))
-
-
-
-    types = ['pcfilter']
-    if type_name in types:
-        setName(node, 'pcfilter_'+node.parm('channel').eval())
-
-    types = ['getattrib', 'primuv']
-    if type_name in types:
-        setName(node, type_name+'_'+node.parm('attrib').eval())
-
-    types = ['attribcopy']
-    if type_name in types:
-        attribname = node.parm('attribname').eval()
-        if node.parm('attrib').eval()==0:
-            attribname = 'Cd'
-        elif node.parm('attrib').eval()==1:
-            attribname = 'uv'
-        setName(node, type_name+'_'+attribname)
-
-    types = ['attribpromote']
-    if type_name in types:
-        setName(node, type_name+'_'+node.parm('inname').eval()+'_to_'+node.parm('outclass').evalAsString())
-
-    types = ['attribtransfer']
-    if type_name in types:
-        node_name = type_name
-        if node.parm('detailattribs').eval()==1:
-            node_name = node_name+' '+node.parm('detailattriblist').eval()
-        if node.parm('primitiveattribs').eval()==1:
-            node_name = node_name+' '+node.parm('primattriblist').eval()
-        if node.parm('pointattribs').eval()==1:
-            node_name = node_name+' '+node.parm('pointattriblist').eval()
-        if node.parm('vertexattribs').eval()==1:
-            node_name = node_name+' '+node.parm('vertexattriblist').eval()
-        setName(node, node_name.strip().replace(' ','_'))
-
-
-    types = ['bind']
-    if type_name in types:
-        if node.parm('parmname').eval() in ['', 'parm']:
-            g = node.parent().geometry()
-            attribs = sorted(g.pointAttribs(), key=lambda x: x.name())
-            attrib = selectAttribute(attribs)
-            if attrib:
-                attr_size  = attribs[attrib[0]].size()
-                attr_dtype = attribs[attrib[0]].dataType()
-                attr_type = 0 # float
-                if attr_dtype == hou.attribData.Float:
-                    if attr_size==3:
-                        attr_type = 7  # vector
-                    elif attr_size==2:
-                        attr_type = 5  # vector2
-                    elif attr_size==4:
-                        attr_type = 11  # vector4
-                    else:
-                        attr_type = 0  # float
-                elif attr_dtype == hou.attribData.Int:
-                    if attr_size==1:
-                        attr_type=1  # int
-                else:
-                    if attr_size==1:
-                        attr_type = 15 # string
-                node.parm('parmname').set(attribs[attrib[0]].name())
-                node.parm('parmtype').set(attr_type)
-        # check the inputs and rename the node
-        if len(node.inputConnections()) or node.parm('exportparm').eval()==1:
-            setName(node, 'OUT')
-        else:
-            setName(node, 'IN')
-
-    types = ['group']
-    if type_name in types:
-        if node.parm('docreategrp').eval()==1:
-            setName(node, node.parm('crname').eval())
-            setName(node, node.parm('crname').eval())
-
-    types = ['groupcopy']
-    if type_name in types:
-        node_name = type_name
-        if node.parm('primitives').eval()==1:
-            node_name = node_name+' '+node.parm('primgroups').eval()
-        if node.parm('points').eval()==1:
-            node_name = node_name+' '+node.parm('pointgroups').eval()
-        if node.parm('edges').eval()==1:
-            node_name = node_name+' '+node.parm('edgegroups').eval()
-        setName(node, node_name.strip().replace(' ','_'))
-
-
-    types = ['blast']
-    if type_name in types:
-        grname = node.parm('group').eval().replace(' ','_')
-        #volume fix
-        grname = grname.replace('@name=','')
-        if node.parm('negate').eval()==0:
-            setName(node, "blast_"+grname)
-        else:
-            setName(node, "keep_"+grname)
-
-    types = ['convertvdb']
-    if type_name in types:
-        setName(node, 'convertvdb_to_'+node.parm('conversion').evalAsString())
-
-    types = ['trail']
-    if type_name in types:
-        if node.parm('result').eval()==3:
-            setName(node, 'trail_velocity_'+['backward','central','forward'][node.parm('velapproximation').eval()])
-
-
-
-    types = ['whMantra']
-    if type_name in types:
-        rv_list = node.parm('vm_picture').eval().replace(str(int(round(hou.frame()))).zfill(4), '####')
-        return rv_list
-        #cmd = 'rv '+node.parm('vm_picture').eval().replace(str(int(round(hou.frame()))).zfill(4), '####')
-        #subprocess.Popen( cmd.split(), stdout=subprocess.PIPE)
-
-    types = ['whCacheWriter']
-    if type_name in types:
-        film = os.environ['FILM']
-        tree = os.environ['TREE']
-        scene = os.environ['SCENE']
-        shot = os.environ['SHOT']
-        elem = node.parm('elem').eval()
-        cmd = 'fxStarfish -a browse -f %s -sc %s -t %s -sh %s -l %s'%(film,tree,scene,shot, elem)
-        print cmd.split()
-        #subprocess.call( cmd.split() )
-        subprocess.Popen( cmd.split(), stdout=subprocess.PIPE)
-
-
-
-#    types = ['attribvop']
-#    constparms =  'ptnum vtxnum primnum id numpt numvtx numprim Time TimeInc Frame life age '
-#    constparms += 'OpInput1 OpInput2 OpInput3 OpInput4 uv1 uv2 uv3 P1 P2 P3 v1 v2 v3 '
-#    constparms += 'force1 force2 force3 Cd1 Cd2 Cd3 N1 N2 N3'
-##    constparms = constparms.split()
-#    if type_name in types:
-#        parms = [i.name() for i in node.spareParms() if i.name() not in constparms.split()]
-#        #and i.isHidden()==False]
-#        node.addSpareParmFolder('Spares', in_folder=parms)
-#        for i in parms:
-#            print i.name()
-
-    types = ['if']
-    if type_name in types:
-        if hou.node( node.path()+'/subinput1') and hou.node( node.path()+'/suboutput1'):
-            hou.node( node.path()+'/subinput1').destroy()
-            hou.node( node.path()+'/suboutput1').destroy()
-            node_v = node.createNode('geometryvopglobal::2.0', exact_type_name=True)
-            node_r = node.createNode('removepoint')
-            connectParm(node_v, "ptnum", node_r, "ptnum")
-            node_v.moveToGoodPosition()
-            node_r.moveToGoodPosition()
-            setName(node, type_name+'_remove_points')
-
-
-    types = ['pcopen']
-    if type_name in types:
-        if len(node.outputs())==0:
-            parent = node.parent()
-            newNodes = []
-
-            node.parm('radius').set(10000)
-
-            pcfilterP = parent.createNode('pcfilter')
-            customProcessNode(pcfilterP)
-            connectParm(node, 'handle', pcfilterP, 'handle')
-            pcfilterP.moveToGoodPosition()
-
-            dist = parent.createNode('distance')
-            setName(dist,'dist')
-            connectParm(pcfilterP, 'value', dist, 'p2')
-            dist.moveToGoodPosition()
-
-            fit = parent.createNode('fit')
-            setName(fit, 'fit_fade_dist')
-            fit.parm('destmin').set(1.0)
-            fit.parm('destmax').set(0.0)
-            connectParm(dist, 'dist', fit, 'val')
-            fit.moveToGoodPosition()
-
-            inP = node.inputConnectors()[ node.inputNames().index('P')]
-            if inP:
-                inConnector = node.inputConnectors()[ node.inputNames().index('P')][0]
-                connectParm(inConnector.inputNode(), inConnector.inputName(), dist, 'p1')
-
-            parmFadeDist = parent.createNode('parameter')
-            parmFadeDist.parm('parmname').set('parm_pcfilter_fade_dist')
-            customProcessNode(parmFadeDist)
-            connectParm(parmFadeDist, 'parm_pcfilter_fade_dist', fit, 'srcmax')
-            parmFadeDist.moveToGoodPosition()
-
-            pcfilterValue = parent.createNode('pcfilter')
-            pcfilterValue.parm('channel').set('Cd')
-            customProcessNode(pcfilterValue)
-            connectParm(node, 'handle', pcfilterValue, 'handle')
-            pcfilterValue.moveToGoodPosition()
-
-            mult = parent.createNode('multiply')
-            setName(mult,'mult_fade_dist')
-            mult.setInput(0, pcfilterValue, pcfilterValue.outputNames().index("value"))
-            mult.setInput(1, fit, fit.outputNames().index("shift"))
-            mult.moveToGoodPosition()
-
-    types = ['attribvop']
-    if type_name in types:
-        if node.parm('stdswitcher3').isHidden()==True:
-            node.parm('stdswitcher3').hide(False)
-            #node.parm('stdswitcher31_1').hide(False)
-        else:
-            node.parm('stdswitcher3').hide(True)
-            #node.parm('stdswitcher31_1').hide(False)
-
-#
-#
-# main
-#
-#
-
-nodes = hou.selectedNodes()
-
-rv_list = []
-
-for node in nodes:
-    print node.name(), node.type().name(),  node.color()
-    print kwargs
-    rv = customProcessNode(node)
-    if rv:
-        rv_list.append(rv)
-
-if len(rv_list)>0:
-    cmd = 'rv -tile '+' '.join(rv_list)
-    print cmd
-    subprocess.Popen( cmd.split(), stdout=subprocess.PIPE)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+cstools.run()
 ]]></script>
+    <keywordList>
+      <keyword>cstool</keyword>
+    </keywordList>
   </tool>
 
-  <tool name="csToggleColorSettings" label="csToggleColorSettings" icon="COP2_lookup">
+  <tool name="cs_alt" label="cs (a)" icon="SOP_wiretransfershape">
+    <script scriptType="python"><![CDATA[import cstools
+
+cstools.run(alt_mode=True)]]></script>
+    <keywordList>
+      <keyword>cstool</keyword>
+    </keywordList>
+  </tool>
+
+  <tool name="csToggleColorSettings" label="toggle color" icon="COP2_lookup">
     <script scriptType="python"><![CDATA[
 if hou.hscript("colorsettings -D -p")[0].split('\n')[2].split('=')[1].strip()== '""':
     hou.hscript('colorsettings -A -p -v -f -g 1 -l "/vol/weta/luts/DigiSX_houdini.lut"')
 else:
-    hou.hscript('colorsettings -A -p -v -f -g 1 -l ""')
+    hou.hscript('colorsettings -A -p -v -f -g 1 -l ""')]]></script>
+  </tool>
+
+  <tool name="csToggleOutPane" label="toggle /out" icon="VOP_switch">
+    <script scriptType="python"><![CDATA[import os
+import toolutils 
+
+panes = [ x for x in hou.ui.paneTabs() if x.type()==hou.paneTabType.NetworkEditor]
+curpwd = panes[0].pwd().path()
+
+if not "CSTOGGLEOUTPANE" in os.environ:
+    os.environ['CSTOGGLEOUTPANE'] = curpwd
+
+if curpwd!='/out':    
+    os.environ['CSTOGGLEOUTPANE'] = curpwd
+    panes[0].setPwd(hou.node('/out'))
+else:    
+    panes[0].setPwd(hou.node(os.environ['CSTOGGLEOUTPANE']))
 ]]></script>
   </tool>
 
-  <tool name="csSmoke" label="csSmoke" icon="SHELF_smoke_heavy">
-    <toolMenuContext name="network">
-      <contextOpType>Sop/primitive</contextOpType>
-      <contextNetType>SOP</contextNetType>
-    </toolMenuContext>
+  <tool name="csToggleDisplayDependencies" label="toggle depends" icon="VOP_switch">
     <script scriptType="python"><![CDATA[
-import sys
-import toolutils
-
-outputnode = None
-inputindex = -1
-inputnode = None
-outputindex = -1
-
-num_args = 1
-h_extra_args = ''
-pane = toolutils.activePane(kwargs)
-if not isinstance(pane, hou.NetworkEditor):
-    pane = hou.ui.paneTabOfType(hou.paneTabType.NetworkEditor)
-    if pane is None:
-       hou.ui.displayMessage(
-               'Cannot create node: cannot find any network pane')
-       sys.exit(0)
-else: # We're creating this tool from the TAB menu inside a network editor
-    pane_node = pane.pwd()
-    if kwargs.has_key("outputnodename") and kwargs.has_key("inputindex"):
-        outputnode = pane_node.node(kwargs["outputnodename"])
-        inputindex = kwargs["inputindex"]
-        h_extra_args += 'set arg4 = "' + kwargs["outputnodename"] + '"\n'
-        h_extra_args += 'set arg5 = "' + str(inputindex) + '"\n'
-        num_args = 6
-    if kwargs.has_key("inputnodename") and kwargs.has_key("outputindex"):
-        inputnode = pane_node.node(kwargs["inputnodename"])
-        outputindex = kwargs["outputindex"]
-        h_extra_args += 'set arg6 = "' + kwargs["inputnodename"] + '"\n'
-        h_extra_args += 'set arg9 = "' + str(outputindex) + '"\n'
-        num_args = 9
-    if kwargs.has_key("autoplace"):
-        autoplace = kwargs["autoplace"]
-    else:
-        autoplace = False
-    if kwargs.has_key("nodepositionx") and             kwargs.has_key("nodepositiony"):
-        try:
-            pos = [ float( kwargs["nodepositionx"] ),
-                    float( kwargs["nodepositiony"] )]
-        except:
-            pos = None
-    else:
-        pos = None
-    if not autoplace and not pane.autoPlaceNodes() and not pane.listMode():
-        if pos is not None:
-            pass
-        elif outputnode is None:
-            pos = pane.selectPosition(inputnode, outputindex, None, -1)
-        else:
-            pos = pane.selectPosition(inputnode, outputindex,
-                                      outputnode, inputindex)
-    if pos is None and pane.autoPlaceNodes():
-        pos = pane.cursorPosition()
-
-    if pos is not None:
-        if kwargs.has_key("node_bbox"):
-            size = kwargs["node_bbox"]
-            pos[0] -= size[0] / 2
-            pos[1] -= size[1] / 2
-        else:
-            pos[0] -= 0.573625
-            pos[1] -= 0.220625
-        h_extra_args += 'set arg2 = "' + str(pos[0]) + '"\n'
-        h_extra_args += 'set arg3 = "' + str(pos[1]) + '"\n'
-h_extra_args += 'set argc = "' + str(num_args) + '"\n'
-
-pane_node = pane.pwd()
-child_type = pane_node.childTypeCategory().nodeTypes()
-
-if not child_type.has_key('dopnet'):
-   hou.ui.displayMessage(
-           'Cannot create node: incompatible pane network type')
-   sys.exit(0)
-
-# First clear the node selection
-pane_node.setSelected(False, True)
-
-h_path = pane_node.path()
-h_preamble = 'set arg1 = "' + h_path + '"\n'
-h_cmd = r'''
-if ($argc < 2 || "$arg2" == "") then
-   set arg2 = 0
-endif
-if ($argc < 3 || "$arg3" == "") then
-   set arg3 = 0
-endif
-# Automatically generated script: Tuesday July 07, 12:30 2015
-# $arg1 - the path to add this node
-# $arg2 - x position of the tile
-# $arg3 - y position of the tile
-# $arg4 - input node to wire to
-# $arg5 - which input to wire to
-# $arg6 - output node to wire to
-# $arg7 - the type of this node
-# $arg8 - the node is an indirect input
-# $arg9 - index of output from $arg6
-
-\set noalias = 1
-set saved_path = `execute("oppwf")`
-opcf $arg1
-
-# Node $_obj_geo_smoke_primitive_hide_all_but_density1 (Sop/primitive)
-set _obj_geo_smoke_primitive_hide_all_but_density1 = `run("opadd -e -n -v primitive primitive_hide_all_but_density1")`
-oplocate -x `$arg2 + 0` -y `$arg3 + 0` $_obj_geo_smoke_primitive_hide_all_but_density1
-chblockbegin
-chadd -t 0 0 $_obj_geo_smoke_primitive_hide_all_but_density1 px
-chkey -t 0 -v 0 -m 0 -a 0 -A 0 -T a  -F '$CEX' $_obj_geo_smoke_primitive_hide_all_but_density1/px
-chadd -t 0 0 $_obj_geo_smoke_primitive_hide_all_but_density1 py
-chkey -t 0 -v 0 -m 0 -a 0 -A 0 -T a  -F '$CEY' $_obj_geo_smoke_primitive_hide_all_but_density1/py
-chadd -t 0 0 $_obj_geo_smoke_primitive_hide_all_but_density1 pz
-chkey -t 0 -v 0 -m 0 -a 0 -A 0 -T a  -F '$CEZ' $_obj_geo_smoke_primitive_hide_all_but_density1/pz
-chadd -t 0 0 $_obj_geo_smoke_primitive_hide_all_but_density1 upvectorx
-chkey -t 0 -v 1 -m 0 -a 0 -A 0 -T a  -F '$NX' $_obj_geo_smoke_primitive_hide_all_but_density1/upvectorx
-chadd -t 0 0 $_obj_geo_smoke_primitive_hide_all_but_density1 upvectory
-chkey -t 0 -v 1 -m 0 -a 0 -A 0 -T a  -F '$NY' $_obj_geo_smoke_primitive_hide_all_but_density1/upvectory
-chadd -t 0 0 $_obj_geo_smoke_primitive_hide_all_but_density1 upvectorz
-chkey -t 0 -v 1 -m 0 -a 0 -A 0 -T a  -F '$NZ' $_obj_geo_smoke_primitive_hide_all_but_density1/upvectorz
-chadd -t 0 0 $_obj_geo_smoke_primitive_hide_all_but_density1 diffr
-chkey -t 0 -v 1 -m 0 -a 0 -A 0 -T a  -F '$CR' $_obj_geo_smoke_primitive_hide_all_but_density1/diffr
-chadd -t 0 0 $_obj_geo_smoke_primitive_hide_all_but_density1 diffg
-chkey -t 0 -v 1 -m 0 -a 0 -A 0 -T a  -F '$CG' $_obj_geo_smoke_primitive_hide_all_but_density1/diffg
-chadd -t 0 0 $_obj_geo_smoke_primitive_hide_all_but_density1 diffb
-chkey -t 0 -v 1 -m 0 -a 0 -A 0 -T a  -F '$CB' $_obj_geo_smoke_primitive_hide_all_but_density1/diffb
-chadd -t 0 0 $_obj_geo_smoke_primitive_hide_all_but_density1 alpha
-chkey -t 0 -v 1 -m 0 -a 0 -A 0 -T a  -F '$CA' $_obj_geo_smoke_primitive_hide_all_but_density1/alpha
-chadd -t 0 0 $_obj_geo_smoke_primitive_hide_all_but_density1 crease
-chkey -t 0 -v 0 -m 0 -a 0 -A 0 -T a  -F '$CREASE' $_obj_geo_smoke_primitive_hide_all_but_density1/crease
-chadd -t 0 0 $_obj_geo_smoke_primitive_hide_all_but_density1 metaweight
-chkey -t 0 -v 1 -m 0 -a 0 -A 0 -T a  -F '$WEIGHT' $_obj_geo_smoke_primitive_hide_all_but_density1/metaweight
-chadd -t 0 0 $_obj_geo_smoke_primitive_hide_all_but_density1 prblur
-chkey -t 0 -v 0.033333333333333333 -m 0 -a 0 -A 0 -T a  -F '1/$FPS' $_obj_geo_smoke_primitive_hide_all_but_density1/prblur
-chblockend
-opparm -V 14.0.379 $_obj_geo_smoke_primitive_hide_all_but_density1 group ( '@name=temperature @name=vel.*' ) stdswitcher ( 5 5 5 5 5 5 ) dovolvis ( on ) volvis ( invisible )
-opcolor -c 0 0.80000001192092896 1 $_obj_geo_smoke_primitive_hide_all_but_density1
-opset -d on -r on -h off -f off -y off -t off -l off -s off -u off -c off -e on -b off $_obj_geo_smoke_primitive_hide_all_but_density1
-opexprlanguage -s hscript $_obj_geo_smoke_primitive_hide_all_but_density1
-opuserdata -n '___Version___' -v '14.0.379' $_obj_geo_smoke_primitive_hide_all_but_density1
-opset -p on $_obj_geo_smoke_primitive_hide_all_but_density1
-opcf $arg1
-
-# Node $_obj_geo_smoke_bound_limits1 (Sop/bound)
-set _obj_geo_smoke_bound_limits1 = `run("opadd -e -n -v bound bound_limits1")`
-oplocate -x `$arg2 + 0` -y `$arg3 + 2.0691900253295898` $_obj_geo_smoke_bound_limits1
-chblockbegin
-chadd -t -0.041666666666666664 -0.041666666666666664 $_obj_geo_smoke_bound_limits1 minpady
-chkey -t -0.041666666666666664 -v 0 -m 0 -a 0 -A 0 -T a  -F 'ch("minpadx")' $_obj_geo_smoke_bound_limits1/minpady
-chadd -t -0.041666666666666664 -0.041666666666666664 $_obj_geo_smoke_bound_limits1 minpadz
-chkey -t -0.041666666666666664 -v 0 -m 0 -a 0 -A 0 -T a  -F 'ch("minpadx")' $_obj_geo_smoke_bound_limits1/minpadz
-chadd -t -0.041666666666666664 -0.041666666666666664 $_obj_geo_smoke_bound_limits1 maxpadx
-chkey -t -0.041666666666666664 -v 0 -m 0 -a 0 -A 0 -T a  -F 'ch("minpadx")' $_obj_geo_smoke_bound_limits1/maxpadx
-chadd -t -0.041666666666666664 -0.041666666666666664 $_obj_geo_smoke_bound_limits1 maxpadz
-chkey -t -0.041666666666666664 -v 0 -m 0 -a 0 -A 0 -T a  -F 'ch("minpadx")' $_obj_geo_smoke_bound_limits1/maxpadz
-chblockend
-opparm -V 14.0.379 $_obj_geo_smoke_bound_limits1 minpad ( 1 minpady minpadz ) maxpad ( maxpadx 4 maxpadz )
-opset -d off -r off -h off -f off -y off -t off -l off -s off -u off -c off -e on -b off $_obj_geo_smoke_bound_limits1
-opexprlanguage -s hscript $_obj_geo_smoke_bound_limits1
-opuserdata -n '___Version___' -v '14.0.379' $_obj_geo_smoke_bound_limits1
-opset -p on $_obj_geo_smoke_bound_limits1
-opcf $arg1
-
-# Node $_obj_geo_smoke_fluidsource2 (Sop/fluidsource)
-set _obj_geo_smoke_fluidsource2 = `run("opadd -e -n -v fluidsource fluidsource2")`
-oplocate -x `$arg2 + -1.4673995971679688` -y `$arg3 + 3.0357599258422852` $_obj_geo_smoke_fluidsource2
-opparm $_obj_geo_smoke_fluidsource2  number_of_volumes ( 2 ) feather_in_ramp ( 2 ) feather_out_ramp ( 2 ) vel_number_of_volumes ( 1 ) vel_vortexramp ( 3 )
-chblockbegin
-chadd -t 0 0 $_obj_geo_smoke_fluidsource2 vel_divsize
-chkey -t 0 -v 0 -m 0 -a 0 -A 0 -T a  -F 'ch(\'./divsize\')' $_obj_geo_smoke_fluidsource2/vel_divsize
-chadd -t 0 0 $_obj_geo_smoke_fluidsource2 vel_objframe
-chkey -t 0 -v 0 -m 0 -a 0 -A 0 -T a  -F '$FF-0.5' $_obj_geo_smoke_fluidsource2/vel_objframe
-chblockend
-opparm $_obj_geo_smoke_fluidsource2 number_of_volumes ( 2 ) settings ( 5 5 5 5 5 5 5 ) feather_in_ramp2pos ( 1 ) feather_in_ramp2value ( 1 ) feather_out_ramp2pos ( 1 ) feather_out_ramp2value ( 1 ) vel_vortexramp2pos ( 0.5 ) vel_vortexramp2value ( 1 ) vel_vortexramp3pos ( 1 ) volvis2 ( slice ) name2 ( temperature )
-opset -d off -r off -h off -f off -y off -t off -l off -s off -u off -c off -e on -b off $_obj_geo_smoke_fluidsource2
-opexprlanguage -s hscript $_obj_geo_smoke_fluidsource2
-opuserdata -n '___Version___' -v '' $_obj_geo_smoke_fluidsource2
-opuserdata -n '___toolcount___' -v '3' $_obj_geo_smoke_fluidsource2
-opuserdata -n '___toolid___' -v 'dynamics_burnsource' $_obj_geo_smoke_fluidsource2
-opset -p on $_obj_geo_smoke_fluidsource2
-opcf $arg1
-
-# Node $_obj_geo_smoke_sphere2 (Sop/sphere)
-set _obj_geo_smoke_sphere2 = `run("opadd -e -n -v sphere sphere2")`
-oplocate -x `$arg2 + -1.4673995971679688` -y `$arg3 + 4.0206999778747559` $_obj_geo_smoke_sphere2
-opset -d off -r off -h off -f off -y off -t off -l off -s off -u off -c off -e on -b off $_obj_geo_smoke_sphere2
-opexprlanguage -s hscript $_obj_geo_smoke_sphere2
-opuserdata -n '___Version___' -v '14.0.379' $_obj_geo_smoke_sphere2
-opset -p on $_obj_geo_smoke_sphere2
-opcf $arg1
-
-# Node $_obj_geo_smoke_dopnet_smoke1 (Sop/dopnet)
-set _obj_geo_smoke_dopnet_smoke1 = `run("opadd -e -n -v dopnet dopnet_smoke1")`
-oplocate -x `$arg2 + 0` -y `$arg3 + 0.82793998718261719` $_obj_geo_smoke_dopnet_smoke1
-opparm $_obj_geo_smoke_dopnet_smoke1  numobj ( 3 )
-chblockbegin
-chadd -t 0 0 $_obj_geo_smoke_dopnet_smoke1 timestep
-chkey -t 0 -v 0 -m 0 -a 0 -A 0 -T a  -F 'ch("timescale")/(ch("substep")*$FPS)' $_obj_geo_smoke_dopnet_smoke1/timestep
-chadd -t 0 0 $_obj_geo_smoke_dopnet_smoke1 timeoffset
-chkey -t 0 -v 0 -m 0 -a 0 -A 0 -T a  -F '(ch("startframe")-1)/$FPS' $_obj_geo_smoke_dopnet_smoke1/timeoffset
-chadd -t 0 0 $_obj_geo_smoke_dopnet_smoke1 startframe
-chkey -t 0 -v 1 -m 0 -a 0 -A 0 -T a  -F '$SFRAME' $_obj_geo_smoke_dopnet_smoke1/startframe
-chblockend
-opparm -V 14.0.379 $_obj_geo_smoke_dopnet_smoke1 stdswitcher ( 1 1 1 ) numobj ( 3 ) startframe ( startframe ) objname1 ( * ) dataname1 ( density ) enable2 ( off ) objname2 ( * ) dataname2 ( temperature ) objname3 ( * ) dataname3 ( vel )
-opcolor -c 1 1 1 $_obj_geo_smoke_dopnet_smoke1
-opset -d off -r off -h off -f off -y off -t off -l off -s off -u off -c off -e on -b off $_obj_geo_smoke_dopnet_smoke1
-opexprlanguage -s hscript $_obj_geo_smoke_dopnet_smoke1
-opuserdata -n '___Version___' -v '14.0.379' $_obj_geo_smoke_dopnet_smoke1
-opcf $_obj_geo_smoke_dopnet_smoke1
-
-# Node $_obj_geo_smoke_dopnet_smoke1_pyrosolver1 (Dop/pyrosolver::2.0)
-set _obj_geo_smoke_dopnet_smoke1_pyrosolver1 = `run("opadd -e -n -v pyrosolver::2.0 pyrosolver1")`
-oplocate -x `$arg2 + 6.5683999999999996` -y `$arg3 + 0.0026041300000000001` $_obj_geo_smoke_dopnet_smoke1_pyrosolver1
-opparm $_obj_geo_smoke_dopnet_smoke1_pyrosolver1  remap_cooldown_time ( 2 ) remap_dissipation_field ( 4 ) dist_control_field_ramp ( 2 ) control_field_ramp ( 2 ) turb_control_ramp ( 2 ) conf_control_field_ramp2 ( 5 )
-opparm $_obj_geo_smoke_dopnet_smoke1_pyrosolver1 combustion_1 ( 2 2 2 2 2 ) temp_diffusion ( 0.20000000000000001 ) cooling_rate ( 0.59999999999999998 ) lift ( 2 ) enable_combustion ( off ) evap ( 0.074999999999999997 ) enable_disturbance ( on ) dist_scale ( 0.21249999999999999 ) enable_turbulence ( on ) turbulence_scale ( 0.25 ) confinementscale ( 4 ) wind_2 ( 4 4 4 4 4 4 ) dissipation_control_range ( 0 2 ) dist_density_cutoff ( 0.10000000000000001 ) dist_block_size ( 0.14999999999999999 ) dist_use_control_field ( on ) dist_control_field ( temperature ) dist_control_influence ( 1 ) dist_control_range ( 0 0.050000000000000003 ) turb_swirl_size ( 0.75 ) turb_turb ( 3 ) turb_control_influence ( 1 ) turb_guidestreamerlen ( 1 ) conf_use_control_field ( on ) conf_control_field ( density ) conf_remap_control_field ( on ) conf_control_influence ( 0.75 ) conf_control_field_ramp2 ( 5 ) std_switcher_0_6 ( 1 1 1 1 ) wind_6 ( 2 2 2 2 2 2 2 ) scaled_forces ( '* ^Gravity' ) remap_cooldown_time1value ( 1 ) remap_cooldown_time2pos ( 1 ) remap_cooldown_time2value ( 0.10000000149011612 ) remap_dissipation_field1value ( 1 ) remap_dissipation_field1interp ( catmull-rom ) remap_dissipation_field2pos ( 0.17888999999999999 ) remap_dissipation_field2value ( 0.875 ) remap_dissipation_field2interp ( catmull-rom ) remap_dissipation_field3pos ( 0.36799999999999999 ) remap_dissipation_field3value ( 0.27000000000000002 ) remap_dissipation_field3interp ( catmull-rom ) remap_dissipation_field4pos ( 1 ) remap_dissipation_field4interp ( catmull-rom ) dist_control_field_ramp2pos ( 1 ) dist_control_field_ramp2value ( 1 ) control_field_ramp2pos ( 1 ) control_field_ramp2value ( 1 ) turb_control_ramp2pos ( 1 ) turb_control_ramp2value ( 1 ) conf_control_field_ramp2_1interp ( catmull-rom ) conf_control_field_ramp2_2pos ( 0.059999999999999998 ) conf_control_field_ramp2_2value ( 0.75 ) conf_control_field_ramp2_2interp ( catmull-rom ) conf_control_field_ramp2_3pos ( 0.14999999999999999 ) conf_control_field_ramp2_3value ( 0.92500000000000004 ) conf_control_field_ramp2_3interp ( catmull-rom ) conf_control_field_ramp2_4pos ( 0.90000000000000002 ) conf_control_field_ramp2_4value ( 0.29999999999999999 ) conf_control_field_ramp2_4interp ( catmull-rom ) conf_control_field_ramp2_5pos ( 1 ) conf_control_field_ramp2_5interp ( catmull-rom )
-opset -d off -r off -h off -f off -y off -t off -l off -s off -u off -c off -e on -b off $_obj_geo_smoke_dopnet_smoke1_pyrosolver1
-opexprlanguage -s hscript $_obj_geo_smoke_dopnet_smoke1_pyrosolver1
-opuserdata -n '___Version___' -v '' $_obj_geo_smoke_dopnet_smoke1_pyrosolver1
-opuserdata -n '___toolcount___' -v '2' $_obj_geo_smoke_dopnet_smoke1_pyrosolver1
-opuserdata -n '___toolid___' -v 'dynamics_pyrobox' $_obj_geo_smoke_dopnet_smoke1_pyrosolver1
-
-# Node $_obj_geo_smoke_dopnet_smoke1_smoke (Dop/smokeobject)
-set _obj_geo_smoke_dopnet_smoke1_smoke = `run("opadd -e -n -v smokeobject smoke")`
-oplocate -x `$arg2 + 4.1209300000000004` -y `$arg3 + 1.8851` $_obj_geo_smoke_dopnet_smoke1_smoke
-opparm $_obj_geo_smoke_dopnet_smoke1_smoke  multifield_densityramp ( 2 ) multifield_cdramp ( 2 ) multifield_emitramp ( 2 ) multifield_emitcdramp ( 4 )
-chblockbegin
-chadd -t 0 0 $_obj_geo_smoke_dopnet_smoke1_smoke sizex
-chkey -t 0 -v 3.5 -m 0 -a 0 -A 0 -T a  -F 'bbox(opinputpath("..",0), D_XSIZE)' $_obj_geo_smoke_dopnet_smoke1_smoke/sizex
-chadd -t 0 0 $_obj_geo_smoke_dopnet_smoke1_smoke sizey
-chkey -t 0 -v 5 -m 0 -a 0 -A 0 -T a  -F 'bbox(opinputpath("..",0), D_YSIZE)' $_obj_geo_smoke_dopnet_smoke1_smoke/sizey
-chadd -t 0 0 $_obj_geo_smoke_dopnet_smoke1_smoke sizez
-chkey -t 0 -v 3.5 -m 0 -a 0 -A 0 -T a  -F 'bbox(opinputpath("..",0), D_ZSIZE)' $_obj_geo_smoke_dopnet_smoke1_smoke/sizez
-chadd -t 0 0 $_obj_geo_smoke_dopnet_smoke1_smoke tx
-chkey -t 0 -v 0 -m 0 -a 0 -A 0 -T a  -F 'centroid(opinputpath("..",0), D_X)' $_obj_geo_smoke_dopnet_smoke1_smoke/tx
-chadd -t 0 0 $_obj_geo_smoke_dopnet_smoke1_smoke ty
-chkey -t 0 -v 1.5 -m 0 -a 0 -A 0 -T a  -F 'centroid(opinputpath("..",0), D_Y)' $_obj_geo_smoke_dopnet_smoke1_smoke/ty
-chadd -t 0 0 $_obj_geo_smoke_dopnet_smoke1_smoke tz
-chkey -t 0 -v 0 -m 0 -a 0 -A 0 -T a  -F 'centroid(opinputpath("..",0), D_Z)' $_obj_geo_smoke_dopnet_smoke1_smoke/tz
-chadd -t 0 0 $_obj_geo_smoke_dopnet_smoke1_smoke createframe
-chkey -t 0 -v 0 -m 0 -a 0 -A 0 -T a  -F 'ch(opcreator(".")+"/startframe")' $_obj_geo_smoke_dopnet_smoke1_smoke/createframe
-chadd -t 0 0 $_obj_geo_smoke_dopnet_smoke1_smoke size_unit_compx
-chkey -t 0 -v 0 -m 0 -a 0 -A 0 -T a  -F 'ch("./divsize")- ((ch("./sizex")+ch("./tx"))%ch("./divsize"))' $_obj_geo_smoke_dopnet_smoke1_smoke/size_unit_compx
-chadd -t 0 0 $_obj_geo_smoke_dopnet_smoke1_smoke size_unit_compy
-chkey -t 0 -v 0 -m 0 -a 0 -A 0 -T a  -F 'ch("./divsize")- ((ch("./sizey")+ch("./ty"))%ch("./divsize"))' $_obj_geo_smoke_dopnet_smoke1_smoke/size_unit_compy
-chadd -t 0 0 $_obj_geo_smoke_dopnet_smoke1_smoke size_unit_compz
-chkey -t 0 -v 0 -m 0 -a 0 -A 0 -T a  -F 'ch("./divsize")- ((ch("./sizez")+ch("./tz"))%ch("./divsize"))' $_obj_geo_smoke_dopnet_smoke1_smoke/size_unit_compz
-chblockend
-opparm $_obj_geo_smoke_dopnet_smoke1_smoke divsize ( 0.10000000000000001 ) size ( sizex sizey sizez ) t ( tx ty tz ) solvefirstframe ( on ) multifield_showguide ( on ) density_showguide ( off ) multifield_usebox ( on ) multifield_useboxhash ( on ) multifield_rangemax ( 0.5 ) multifield_densityscale ( 4 ) multifield_shadowscale ( 0.5 ) multifield_densityfield ( density ) multifield_emitscale ( 5 ) multifield_emitfield ( temperature ) multifield_emitcdfield ( heat ) multifield_emitcdrangeoverride ( on ) multifield_emitcdrange ( 0 2 ) multifield_emitcdpreset ( blackbody ) multifield_densityramp2pos ( 1 ) multifield_densityramp2value ( 1 ) multifield_cdramp2pos ( 1 ) multifield_cdramp2c ( 1 1 1 ) multifield_emitramp2pos ( 1 ) multifield_emitramp2value ( 1 ) multifield_emitcdramp1interp ( catmull-rom ) multifield_emitcdramp2pos ( 0.54000000000000004 ) multifield_emitcdramp2c ( 1 0.432 0 ) multifield_emitcdramp2interp ( catmull-rom ) multifield_emitcdramp3pos ( 0.89300000000000002 ) multifield_emitcdramp3c ( 1 0.88329999999999997 0 ) multifield_emitcdramp3interp ( catmull-rom ) multifield_emitcdramp4pos ( 1 ) multifield_emitcdramp4c ( 1 1 1 ) multifield_emitcdramp4interp ( catmull-rom )
-opset -d off -r off -h off -f off -y off -t off -l off -s off -u off -c off -e on -b off $_obj_geo_smoke_dopnet_smoke1_smoke
-opexprlanguage -s hscript $_obj_geo_smoke_dopnet_smoke1_smoke
-opuserdata -n '___Version___' -v '' $_obj_geo_smoke_dopnet_smoke1_smoke
-opuserdata -n '___toolcount___' -v '2' $_obj_geo_smoke_dopnet_smoke1_smoke
-opuserdata -n '___toolid___' -v 'dynamics_smokebox' $_obj_geo_smoke_dopnet_smoke1_smoke
-
-# Node $_obj_geo_smoke_dopnet_smoke1_resize_container (Dop/gasresizefluiddynamic)
-set _obj_geo_smoke_dopnet_smoke1_resize_container = `run("opadd -e -n -v gasresizefluiddynamic resize_container")`
-oplocate -x `$arg2 + 6.3801300000000003` -y `$arg3 + 1.4333` $_obj_geo_smoke_dopnet_smoke1_resize_container
-opparm $_obj_geo_smoke_dopnet_smoke1_resize_container folder0_1 ( 1 1 ) bound_padding ( 0.20000000000000001 ) weighted ( off ) field ( 1 1 ) bound_mode ( 0 ) operator_path ( '`opinputpath("..",1)`' )
-opset -d off -r off -h off -f off -y off -t off -l off -s off -u off -c off -e on -b off $_obj_geo_smoke_dopnet_smoke1_resize_container
-opexprlanguage -s hscript $_obj_geo_smoke_dopnet_smoke1_resize_container
-opuserdata -n '___Version___' -v '' $_obj_geo_smoke_dopnet_smoke1_resize_container
-opuserdata -n '___toolcount___' -v '1' $_obj_geo_smoke_dopnet_smoke1_resize_container
-opuserdata -n '___toolid___' -v 'dynamics_smokebox' $_obj_geo_smoke_dopnet_smoke1_resize_container
-
-# Node $_obj_geo_smoke_dopnet_smoke1_source_density (Dop/sourcevolume)
-set _obj_geo_smoke_dopnet_smoke1_source_density = `run("opadd -e -n -v sourcevolume source_density")`
-oplocate -x `$arg2 + 9.2041299999999993` -y `$arg3 + 2.1110000000000002` $_obj_geo_smoke_dopnet_smoke1_source_density
-opparm $_obj_geo_smoke_dopnet_smoke1_source_density source_path ( '`opinputpath("..",0)`' ) velocity_merge ( add ) vel_mask ( density )
-opset -d off -r off -h off -f off -y off -t off -l off -s off -u off -c off -e on -b off $_obj_geo_smoke_dopnet_smoke1_source_density
-opexprlanguage -s hscript $_obj_geo_smoke_dopnet_smoke1_source_density
-opuserdata -n '___Version___' -v '' $_obj_geo_smoke_dopnet_smoke1_source_density
-opuserdata -n '___toolcount___' -v '3' $_obj_geo_smoke_dopnet_smoke1_source_density
-opuserdata -n '___toolid___' -v 'dynamics_burnsource' $_obj_geo_smoke_dopnet_smoke1_source_density
-opcf ..
-opcf $_obj_geo_smoke_dopnet_smoke1
-
-# Node $_obj_geo_smoke_dopnet_smoke1_OUTPUT (Dop/output)
-set _obj_geo_smoke_dopnet_smoke1_OUTPUT = `run("opadd -e -n -v output OUTPUT")`
-oplocate -x `$arg2 + 6.5683999999999996` -y `$arg3 + -2.0532699999999999` $_obj_geo_smoke_dopnet_smoke1_OUTPUT
-chblockbegin
-chadd -t 0 0 $_obj_geo_smoke_dopnet_smoke1_OUTPUT f1
-chkey -t 0 -v 0 -m 0 -a 0 -A 0 -T a  -F '$FSTART' $_obj_geo_smoke_dopnet_smoke1_OUTPUT/f1
-chadd -t 0 0 $_obj_geo_smoke_dopnet_smoke1_OUTPUT f2
-chkey -t 0 -v 0 -m 0 -a 0 -A 0 -T a  -F '$FEND' $_obj_geo_smoke_dopnet_smoke1_OUTPUT/f2
-chblockend
-opcolor -c 0.40000000596046448 1 0.40000000596046448 $_obj_geo_smoke_dopnet_smoke1_OUTPUT
-opset -d on -r off -h off -f off -y off -t off -l off -s off -u off -c off -e on -b off $_obj_geo_smoke_dopnet_smoke1_OUTPUT
-opexprlanguage -s hscript $_obj_geo_smoke_dopnet_smoke1_OUTPUT
-opuserdata -n '___Version___' -v '' $_obj_geo_smoke_dopnet_smoke1_OUTPUT
-opuserdata -n '___toolcount___' -v '2' $_obj_geo_smoke_dopnet_smoke1_OUTPUT
-opuserdata -n '___toolid___' -v 'pyro_billowysmoke' $_obj_geo_smoke_dopnet_smoke1_OUTPUT
-
-# Node $_obj_geo_smoke_dopnet_smoke1_merge2 (Dop/merge)
-set _obj_geo_smoke_dopnet_smoke1_merge2 = `run("opadd -e -n -v merge merge2")`
-oplocate -x `$arg2 + 9.2041299999999993` -y `$arg3 + 0.98150400000000004` $_obj_geo_smoke_dopnet_smoke1_merge2
-chblockbegin
-chadd -t 0 0 $_obj_geo_smoke_dopnet_smoke1_merge2 activation
-chkey -t 0 -v 1 -m 0 -a 0 -A 0 -T a  -F 'constant()' $_obj_geo_smoke_dopnet_smoke1_merge2/activation
-chblockend
-opset -d off -r off -h off -f off -y off -t off -l off -s off -u off -c off -e on -b off $_obj_geo_smoke_dopnet_smoke1_merge2
-opexprlanguage -s hscript $_obj_geo_smoke_dopnet_smoke1_merge2
-opuserdata -n '___Version___' -v '14.0.379' $_obj_geo_smoke_dopnet_smoke1_merge2
-opuserdata -n '___toolcount___' -v '2' $_obj_geo_smoke_dopnet_smoke1_merge2
-opuserdata -n '___toolid___' -v 'pyro_billowysmoke' $_obj_geo_smoke_dopnet_smoke1_merge2
-oporder -e pyrosolver1 smoke resize_container source_density OUTPUT merge2
-opcf ..
-opset -p on $_obj_geo_smoke_dopnet_smoke1
-
-opcf $arg1
-opwire -n $_obj_geo_smoke_dopnet_smoke1 -0 $_obj_geo_smoke_primitive_hide_all_but_density1
-opcf $arg1
-opwire -n $_obj_geo_smoke_fluidsource2 -0 $_obj_geo_smoke_bound_limits1
-opcf $arg1
-opwire -n $_obj_geo_smoke_sphere2 -0 $_obj_geo_smoke_fluidsource2
-opcf $arg1
-opcf $arg1
-opwire -n $_obj_geo_smoke_fluidsource2 -0 $_obj_geo_smoke_dopnet_smoke1
-opwire -n $_obj_geo_smoke_bound_limits1 -1 $_obj_geo_smoke_dopnet_smoke1
-opcf $_obj_geo_smoke_dopnet_smoke1
-opwire -n $_obj_geo_smoke_dopnet_smoke1_smoke -0 $_obj_geo_smoke_dopnet_smoke1_pyrosolver1
-opwire -n $_obj_geo_smoke_dopnet_smoke1_resize_container -1 $_obj_geo_smoke_dopnet_smoke1_pyrosolver1
-opwire -n $_obj_geo_smoke_dopnet_smoke1_merge2 -4 $_obj_geo_smoke_dopnet_smoke1_pyrosolver1
-opwire -n $_obj_geo_smoke_dopnet_smoke1_pyrosolver1 -0 $_obj_geo_smoke_dopnet_smoke1_OUTPUT
-opwire -n $_obj_geo_smoke_dopnet_smoke1_source_density -0 $_obj_geo_smoke_dopnet_smoke1_merge2
-opcf ..
-
-set oidx = 0
-if ($argc >= 9 && "$arg9" != "") then
-    set oidx = $arg9
-endif
-
-if ($argc >= 5 && "$arg4" != "") then
-    set output = $_obj_geo_smoke_dopnet_smoke1
-    opwire -n $output -$arg5 $arg4
-endif
-if ($argc >= 6 && "$arg6" != "") then
-    set input = $_obj_geo_smoke_primitive_hide_all_but_density1
-    if ($arg8) then
-        opwire -n -i $arg6 -0 $input
-    else
-        opwire -n -o $oidx $arg6 -0 $input
-    endif
-endif
-opcf $saved_path
-'''
-hou.hscript(h_preamble + h_extra_args + h_cmd)
-]]></script>
+panes = [x for x in hou.ui.paneTabs() if x.type()==hou.paneTabType.NetworkEditor and x.isCurrentTab()]
+if panes:
+  for pane in panes:
+    val = int(pane.getPref('showdep'))
+    val = 2 if val < 2 else 0
+    pane.setPref('showdep', str(val))
+    pane.flashMessage('$HFS/houdini/help/icons/DIALOG/important.svg', 'Displaying%s Dependencies' % ('' if val else ' No'), 1) 
+    ]]></script>
   </tool>
 
-  <toolshelf name="shelf_claude" label="Claude">
-    <memberTool name="cs"/>
-    <memberTool name="cs_alt"/>
-    <memberTool name="csToggleColorSettings"/>
-    <memberTool name="csSmoke"/>
-    <memberTool name="csToggleDisplayDependencies"/>
-    <memberTool name="csToggleOutPane"/>
-    <memberTool name="csAttribWrangle"/>
-    <memberTool name="csAddDescriptiveParm"/>
-    <memberTool name="srnd_docbuild"/>
-    <memberTool name="csSetVisualizeNode"/>
-    <memberTool name="csDumpParms"/>
-    <memberTool name="tool_whMantra"/>
-    <memberTool name="csBubbleUpTakeParms"/>
-  </toolshelf>
+  <tool name="srnd_docbuild0" label="Doc Build" icon="MISC_tutorials">
+    <script scriptType="python"><![CDATA[]]></script>
+  </tool>
+
+  <tool name="srnd_docbuild" label="Doc Build" icon="MISC_tutorials">
+    <helpText><![CDATA[= Doc Build =
+
+#type: shelf
+#internal: docbuild
+#icon: MISC/tutorials
+
+""" Quick way to generate help cards for hdas. """
+
+== Overview ==
+
+Select The node you want to generate a help-card for,
+then click this tool to launch a widget containing
+a pre-generated help-card.
+
+@related
+    * [Houdini wiki markup|format]
+    * [Documenting your assets|nodes]
+]]></helpText>
+    <script scriptType="python"><![CDATA[
+import textwrap
+import os
+import os.path
+import re
+from PySide import QtCore
+from PySide.QtGui import QDialog, QTextEdit, QTextOption, QVBoxLayout, QCursor
+
+
+class TextDialog(QDialog):
+
+    def __init__(self, message, parent=None):
+        super(TextDialog, self).__init__(parent)
+        
+        self.setWindowTitle('Doc Builder')
+        vertical_layout = QVBoxLayout()
+        self.setLayout(vertical_layout)
+        
+        cursor_pos = QCursor.pos()
+        self.setGeometry(cursor_pos.x(), cursor_pos.y(), 700, 800)
+
+
+        text_edit = QTextEdit()
+        text_edit.setReadOnly(True)
+        text_edit.setWordWrapMode(QTextOption.NoWrap)
+        text_edit.setPlainText(message)
+        vertical_layout.addWidget(text_edit)
+        
+    def closeEvent(self, event):
+        self.setParent(None)
+
+
+def get_doc_str():
+    indent = '    '
+    node = None
+    sel = hou.selectedNodes()
+    if not sel:
+        hou.ui.displayMessage('No node selected', severity=hou.severityType.Error)
+        return None
+    node = sel[-1]
+    definition = node.type().definition()
+    node_type = node.type()
+    entries = definition.parmTemplateGroup().entriesWithoutFolders()
+    result = ''
+    if not definition:
+        return
+        
+    result += '= {} =\n\n'.format(definition.description())
+    
+    context = node_type.category().name()
+    if context == 'Driver':
+        context = 'out'
+    context = context.lower()
+    _, namespace, internal, version = node_type.nameComponents()
+    icon_dir = node_type.category().typeName()
+    icon = os.path.join(icon_dir, internal)
+    
+    result += '#type: node\n'
+    result += '#context: {}\n'.format(context.lower())
+    result += '#internal: {}\n'.format(internal)
+    result += '#icon: {}\n'.format(icon)
+    result += '#version: {}\n\n'.format(version)
+    
+    result += '""" Short description of the node\'s purpose. """\n\n'
+    
+    result += '== Overview ==\n\n'
+    result += 'Summary of what the node does.\n\n'
+
+    if entries:
+        result += '@parameters\n\n'
+        
+    for template in entries:
+        if template.isHidden():
+            continue
+        elif not template.help():
+            continue
+        elif not template.label() or template.label() == '_':
+            continue
+
+        result += template.label() + ':\n'
+        result += '{}#id: {}\n\n'.format(indent, template.name())
+        help = template.help()
+        help = help.replace('[', '`[').replace(']', ']`')
+        result += textwrap.fill(help,
+                                initial_indent=indent,
+                                subsequent_indent=indent)
+        result += '\n\n'
+    result = result.strip()
+    return result
+
+doc_str = get_doc_str()
+if doc_str:
+    dialog = TextDialog(doc_str)
+    dialog.setParent(hou.ui.mainQtWindow(), QtCore.Qt.Window)
+    dialog.show()
+    ]]></script>
+  </tool>
+
+  <tool name="csBubbleUpTakeParms" label="csBubbleUpTakeParms" icon="PLASMA_App">
+    <script scriptType="python"><![CDATA[panes = [x for x in hou.ui.paneTabs() if x.type()==hou.paneTabType.NetworkEditor and x.isCurrentTab()]
+
+if hou.takes.currentTake() != hou.takes.rootTake():
+    parms = [[x, x.eval()] for x in hou.takes.currentTake().parmTuples()]
+    
+    curname = hou.takes.currentTake().name()
+    
+    hou.takes.setCurrentTake( hou.takes.rootTake() )
+    
+    for parm in parms:
+        parm[0].set( parm[1] )
+        
+    for pane in panes:
+        pane.flashMessage('$HFS/houdini/help/icons/DIALOG/important.svg', 'Set parameters from: %s' % curname, 2)
+        
+else:
+    for pane in panes:
+        pane.flashMessage('$HFS/houdini/help/icons/DIALOG/important.svg','Main take active. Doing nothing.', 2)
+                                                                                                                 ]]></script>
+  </tool>
+
+  <tool name="csDumpParms" label="csDumpParms" icon="SOP_font">
+    <script scriptType="python"><![CDATA[import json
+
+nodes = hou.selectedNodes()
+
+
+for node in nodes:
+    print node.name()
+    filename = "/usr/home/cschitter/%s.txt"%node.name()
+    p = [[x.name(),x.eval()] for x in node.parms()]
+    p = sorted(p, key=lambda parm: parm[0])       
+    with open(filename, "w") as f:
+        for i in p:            
+            f.write('%s: %s\n'%(i[0], i[1]))
+    print '%s -> %s'%(node.name(),filename)
+                                             ]]></script>
+  </tool>
+
+  <tool name="csSetVisualizeNode" label="csSetVisualizeNode" icon="SOP_visualize">
+    <script scriptType="python"><![CDATA[
+nodes = hou.selectedNodes()
+
+for node in nodes:
+    print node.name(), node.type().name(),  node.color()
+    print kwargs
+    col = hou.Color()
+    col.setRGB((0.4, 0.8, 1.0))
+    node.setColor( col ) 
+]]></script>
+  </tool>
 </shelfDocument>

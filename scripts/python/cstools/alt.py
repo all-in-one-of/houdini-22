@@ -17,6 +17,15 @@ def customProcessNode(node):
                 node.parm(button).pressButton()
         hou.setFrame(float(hou.getenv('START_FRAME')))
 
+    # whMantra - add rv list
+    types = ['whMantra', 'ifd']
+    if type_name in types:
+        rv_list = []
+        img = node.parm('vm_picture').eval()
+        if os.path.exists(img):
+            rv_list = img.replace(str(int(round(hou.frame()))).zfill(4), '####')
+        return rv_list
+
 
     # cameras - press buttons
     types = ['wetaCamera', 'wetaStereoCamera']

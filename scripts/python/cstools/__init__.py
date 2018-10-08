@@ -91,21 +91,28 @@ def getPrimType(node):
 #
 
 def run(alt_mode=False):
-    nodes = hou.selectedNodes()
-
     rv_list = []
-
+    nodes = hou.selectedNodes()
     for node in nodes:
         #print node.name(), node.type().name(),  node.color()
         rv = []
         if alt_mode:
-            alt.customProcessNode(node)
-        rv = std.customProcessNode(node)        
+            rv = alt.customProcessNode(node)
+        else:
+            rv = std.customProcessNode(node)        
         if rv:
             rv_list.append(rv)
         colors.customProcessNode(node)        
+
+    # netboxes
+    items = [x for x in hou.selectedItems() if x not in nodes]
+    for item in items:
+        c = hou.ui.selectColor(item.color())
+        if c:
+            item.setColor(c)
         
-    if len(rv_list)>0:
+    # rv
+    if len(rv_list)>0 and alt_mode:
         cmd = 'rv -tile '+' '.join(rv_list)   
         print cmd
         subprocess.Popen( cmd.split(), stdout=subprocess.PIPE)
