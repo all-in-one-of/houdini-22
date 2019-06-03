@@ -19,11 +19,12 @@ def customProcessNode(node):
     has_output = node.outputConnections()
 
     color_viz =  [0.0, 0.8, 1.0]
-    color_green = [0.5, 1.0, 0.5]
-    color_green_light = [0.7, 1.0, 0.7]
+    color_green = [0.5, 1.0, 0.4]
+    color_green_light = [0.7, 0.9, 0.6]
     color_yellow= [1.0, 1.0, 0.5]
-    color_yellow_light = [1.0, 1.0, 0.7]
+    color_yellow_light = [1.0, 0.976, 0.666]
     color_turquoise = [0.4, 1.0, 1.0]
+    color_turquoise_light = [0.7, 1.0, 1.0]
     color_white = [1.0, 1.0, 1.0]
     color_violet = [0.7, 0.5, 1.0]
     color_violet_light = [.85, .65, 1.0]
@@ -105,14 +106,16 @@ def customProcessNode(node):
 
     # dopnet
     if type_name in ['dopnet']:
-        cs.setColor(node, color_white)
-        cs.setShape(node, 'bulge')
+        cs.setColor(node, color_green_light)
+        #cs.setColor(node, color_white)
+        #cs.setShape(node, 'bulge')
 
     # dopio
     if type_name in ['dopio', 'dopimport',
                      'dopimportfield', 'dopimportrecords']:
-        cs.setColor(node, color_white)
-        cs.setShape(node, 'bulge_down')
+        cs.setColor(node, color_green_light)
+        #cs.setColor(node, color_white)
+        #cs.setShape(node, 'bulge_down')
 
     # xform
     if type_name in ['xform']:
@@ -166,11 +169,20 @@ def customProcessNode(node):
 
     # whMantra
     types = ['whMantra', 'ifd']
-    if type_name in types:
+    if [x for x in types if type_name.startswith(x)]:
         if type_name == 'whMantra':
             cs.setColor(node, color_violet)
         else:
             cs.setColor(node, color_violet_light)
+        cs.setShape(node, 'clipped_right')
+
+    # whOpenGL
+    types = ['whOpenGL', 'opengl']
+    if [x for x in types if type_name.startswith(x)]:
+        if type_name == 'whOpenGL':
+            cs.setColor(node, color_turquoise)
+        else:
+            cs.setColor(node, color_turquoise_light)
         cs.setShape(node, 'clipped_right')
 
     # whHouGo
@@ -181,7 +193,7 @@ def customProcessNode(node):
 
     # whFxCallsheet
     types = ['whFxCallsheet', 'whFxFilter', 'whFxItem']
-    if type_name in types:
+    if [x for x in types if type_name.startswith(x)]:
         cs.setColor(node, color_green_light)
         cs.setShape(node, 'bulge')
 

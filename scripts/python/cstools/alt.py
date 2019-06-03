@@ -1,4 +1,4 @@
-
+import os
 import cstools as cs
 import hou
 
@@ -19,24 +19,42 @@ def customProcessNode(node):
 
     # whMantra - add rv list
     types = ['whMantra', 'ifd']
-    if type_name in types:
+    if [x for x in types if type_name.startswith(x)]:
         rv_list = []
         img = node.parm('vm_picture').eval()
         if os.path.exists(img):
             rv_list = img.replace(str(int(round(hou.frame()))).zfill(4), '####')
         return rv_list
 
+    # whOpengl - add rv list
+    types = ['whOpenGL', 'opengl']
+    if [x for x in types if type_name.startswith(x)]:
+        rv_list = []
+        img = node.parm('picture').eval()
+        if os.path.exists(img):
+            rv_list = img.replace(str(int(round(hou.frame()))).zfill(4), '####')
+        return rv_list
+
+    # whRank - sets the rank variable
+    types = ['whRank', ]
+    if type_name in types:
+        rank_variable = node.parm('rank_variable').unexpandedString().replace('$','')
+        ret = hou.ui.readInput('set %s: %s' % (rank_variable, node.parm('rank_variable').eval()),
+                    help=node.parm('allranks').eval(),
+                    buttons=('Ok','Cancel') )
+        if ret[0] == 0:
+            print 'setting %s to %d' % (rank_variable, int(ret[1]))
+            hou.putenv(rank_variable, ret[1])
 
     # cameras - press buttons
     types = ['wetaCamera', 'wetaStereoCamera']
-    if type_name in types:
+    if [x for x in types if type_name.startswith(x)]:
         buttons = ['loadPublishedCamera']
         for button in buttons:
             if node.parm(button):
                 print '%s: pressing %s button...' % (node_name, button)
                 node.parm(button).pressButton()
 
-    
     # multiply
     types = ['multiply']
     if type_name in types:
@@ -75,7 +93,6 @@ def customProcessNode(node):
             node.parm('parmlabel').set(name)
         name = node.parm('parmlabel').eval()   
         setName(node, name.replace(' ','_'))    
-        
         
             
     # bind
@@ -142,7 +159,7 @@ def customProcessNode(node):
 
     # whCacheWriter
     types = ['whCacheWriter']
-    if type_name in types:
+    if [x for x in types if type_name.startswith(x)]:
         film = os.environ['FILM']
         tree = os.environ['TREE']
         scene = os.environ['SCENE']
@@ -152,7 +169,6 @@ def customProcessNode(node):
         print cmd.split()
         #subprocess.call( cmd.split() )
         subprocess.Popen( cmd.split(), stdout=subprocess.PIPE)
-            
             
         
     # if

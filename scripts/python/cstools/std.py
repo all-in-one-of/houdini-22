@@ -15,7 +15,8 @@ def customProcessNode(node):
     types = ['object_merge']
     if type_name in types:
         if node.parm('objpath1').eval()!='':
-            cs.setName(node, "__".join(node.parm('objpath1').eval().rsplit('/')[-2:]))
+            cs.setName(node, "__".join(node.parm('objpath1').eval().rsplit('/')[-1:]))
+            #cs.setName(node, "__".join(node.parm('objpath1').eval().rsplit('/')[-2:]))
     
     # null as OUT
     types = ['null']
@@ -233,7 +234,7 @@ def customProcessNode(node):
         s = (node.parm('sx').eval(), node.parm('sy').eval(), node.parm('sz').eval())
         if t == (0.0,0.0,0.0) and r == (0.0,0.0,0.0) and s == (1.0,1.0,1.0):
             if node.parm('scale').eval() == 0.01:
-                cs.setName(node, 'scale_x0.01')
+                cs.setName(node, 'scale_x0.01_')
             elif node.parm('scale').eval() == 100.0:
                 cs.setName(node, 'scale_x100_')
 
@@ -243,6 +244,12 @@ def customProcessNode(node):
         t = node.parm('regiontype1').eval()
         lst = ['position', 'voxel', 'expand', 'reference', 'deactivate']
         cs.setName(node, 'vdbactivate_'+lst[t])
+
+    # vdbcombine
+    types = ['vdbcombine']
+    if type_name in types:
+        t = node.parm('operation').evalAsString()
+        cs.setName(node, 'vdbcombine_'+t)
 
     # whCacheWriter
     types = ['whCacheWriter']
